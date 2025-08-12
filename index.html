@@ -102,7 +102,7 @@
 
     <script>
         // 중요: 이 URL을 1단계에서 배포한 Google Apps Script 웹 앱 URL로 교체하세요.
-        const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbw.../exec'; // <--- 여기에 URL 붙여넣기
+        const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyYoMradeF3e6ybkixgt_fGis5A8sFsEVOUm9AgMXtW4IfXwhRs-RzCH4qXA-xyHqdoVQ/exec'; // <--- 여기에 URL 붙여넣기
 
         // DOM 요소
         const elements = {
@@ -384,7 +384,7 @@
         });
         
         async function getEvaluationFromAI(question, answerA, answerB, modelAName, modelBName) {
-            const apiKey = ""; // API 키는 Canvas 환경에서 자동으로 제공됩니다.
+            const apiKey = "AIzaSyBB8uqP1ECTe40jknSy5XK71TCs8_KbGV0"; // API 키는 Canvas 환경에서 자동으로 제공됩니다.
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
 
             const prompt = `
