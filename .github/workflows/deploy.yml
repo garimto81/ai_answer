@@ -31,15 +31,41 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
       
-      - name: Verify file exists
-        # 배포할 파일이 존재하는지 먼저 확인합니다.
-        # 여기서 오류가 발생하면, 저장소에 'index.html' 파일이 없거나 이름이 다른 것입니다.
-        run: ls -l index.html
+      # --- 디버깅 로그 강화 시작 ---
+      - name: 1. Show Directory Structure
+        run: |
+          echo "--- 현재 디렉토리의 모든 파일 및 폴더 목록 ---"
+          ls -R
+          echo "-------------------------------------------"
+
+      - name: 2. Check GAS_URL Secret
+        run: |
+          if [ -z "${{ secrets.GAS_URL }}" ]; then
+            echo "!!! 오류: GAS_URL Secret이 비어있거나 설정되지 않았습니다."
+            exit 1
+          else
+            echo "--- 성공: GAS_URL Secret을 찾았습니다. (길이는 0이 아님)"
+          fi
+
+      - name: 3. Show index.html content BEFORE replacement
+        run: |
+          echo "--- URL 교체 전 index.html 내용 (placeholder 확인용) ---"
+          cat index.html || echo "!!! 오류: index.html 파일을 찾을 수 없습니다."
+          echo "---------------------------------------------------------"
+      # --- 디버깅 로그 강화 끝 ---
 
       - name: Replace GAS URL Placeholder
         # index.html 파일 내의 플레이스홀더를 GitHub Secret 값으로 교체합니다.
         run: |
           sed -i "s|__GAS_URL_PLACEHOLDER__|${{ secrets.GAS_URL }}|g" index.html
+
+      # --- 디버깅 로그 강화 시작 ---
+      - name: 4. Show index.html content AFTER replacement
+        run: |
+          echo "--- URL 교체 후 index.html 내용 (교체 결과 확인용) ---"
+          cat index.html
+          echo "--------------------------------------------------------"
+      # --- 디버깅 로그 강화 끝 ---
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
