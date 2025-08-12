@@ -60,13 +60,18 @@
             </div>
             <div class="text-center mt-8">
                 <button id="analyzeBtn" class="bg-blue-600 text-white font-bold py-3 px-8 rounded-lg hover:bg-blue-700 transition-transform transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-blue-300 text-lg">
-                    분석 시작
+                    AI 자동 분석
                 </button>
             </div>
         </div>
 
         <div id="loading" class="hidden justify-center items-center my-8"><div class="loader"></div><p class="ml-4 text-lg text-gray-600">AI 평가자가 답변을 분석 중입니다...</p></div>
-        <div id="result" class="hidden"></div>
+        
+        <!-- 결과 표시 및 최종 평가 섹션 -->
+        <div id="result" class="hidden space-y-8">
+            <div id="aiAnalysisResult"></div>
+            <div id="userEvaluationSection" class="hidden bg-white p-6 rounded-2xl shadow-lg"></div>
+        </div>
         
         <div class="mt-12"><h2 class="text-2xl font-bold mb-4 text-gray-800">평가 기록</h2><div id="historySection" class="space-y-4"></div></div>
         
@@ -86,6 +91,8 @@
             addModelBtn: document.getElementById('addModelBtn'),
             loading: document.getElementById('loading'),
             resultDiv: document.getElementById('result'),
+            aiAnalysisResult: document.getElementById('aiAnalysisResult'),
+            userEvaluationSection: document.getElementById('userEvaluationSection'),
             errorDiv: document.getElementById('error'),
             errorMessage: document.getElementById('errorMessage'),
             averageScoresSection: document.getElementById('averageScoresSection'),
@@ -97,6 +104,7 @@
 
         // 전역 상태
         let state = { models: [], evaluations: [] };
+        let currentEvaluationResult = null; // AI 분석 결과를 임시 저장
 
         // 초기화
         window.addEventListener('DOMContentLoaded', loadInitialData);
@@ -130,7 +138,6 @@
             renderModelManagementList();
             calculateAndDisplayAverages();
             displayHistory();
-            // 초기 비교 필드 추가
             elements.comparisonContainer.innerHTML = '';
             addComparisonField();
             addComparisonField();
@@ -175,7 +182,6 @@
                 </div>
             `;
             elements.comparisonContainer.appendChild(div);
-            // 새로 추가된 필드에 모델 자동 선택 로직 적용
             const allSelects = elements.comparisonContainer.querySelectorAll('.model-select');
             const lastSelect = allSelects[allSelects.length - 1];
             if (state.models.length > 0) {
@@ -193,7 +199,6 @@
             await postToAction({ action: 'registerModel', modelName: newModelName }, () => {
                 state.models.push(newModelName);
                 renderModelManagementList();
-                // 모든 드롭다운에 새 모델 추가
                 document.querySelectorAll('.model-select').forEach(select => {
                     const option = document.createElement('option');
                     option.value = newModelName;
@@ -234,21 +239,19 @@
 
             try {
                 const evaluationResult = await getEvaluationFromAI(question, comparisonData);
+
+                if (!evaluationResult || !evaluationResult.verdict || !evaluationResult.evaluation || !evaluationResult.verdict.winner) {
+                    throw new Error("AI 분석 결과의 형식이 올바르지 않습니다. 다시 시도해주세요.");
+                }
                 
-                const saveData = {
-                    action: 'saveEvaluation',
-                    data: {
-                        question: question,
-                        verdict: evaluationResult.verdict,
-                        evaluation: comparisonData.map((d, i) => ({ ...d, ...evaluationResult.evaluation[i] }))
-                    }
+                currentEvaluationResult = { // 임시 저장
+                    question,
+                    comparisonData,
+                    aiVerdict: evaluationResult
                 };
-                
-                await postToAction(saveData, () => {
-                    // 성공적으로 저장 후 UI 업데이트
-                    loadInitialData(); // 전체 데이터 다시 로드
-                    displaySingleResult(evaluationResult);
-                });
+
+                displayAiAnalysis(evaluationResult);
+                displayUserEvaluationForm(evaluationResult, comparisonData.map(d => d.model_name));
 
             } catch (err) {
                 console.error('Analysis error:', err);
@@ -257,6 +260,48 @@
                 elements.loading.classList.add('hidden');
                 elements.loading.classList.remove('flex');
             }
+        }
+
+        async function handleSaveFinalEvaluation() {
+            if (!currentEvaluationResult) return showError("분석 결과가 없습니다.");
+
+            const userWinner = document.getElementById('winnerSelect').value;
+            const userComments = document.getElementById('userComments').value;
+            const overallRating = document.getElementById('overallRating').value;
+
+            const saveData = {
+                action: 'saveEvaluation',
+                data: {
+                    question: currentEvaluationResult.question,
+                    // AI 분석 결과
+                    aiWinner: currentEvaluationResult.aiVerdict.verdict.winner,
+                    aiReasoning: currentEvaluationResult.aiVerdict.verdict.reasoning,
+                    // 사용자 최종 평가
+                    userWinner: userWinner,
+                    userComments: userComments,
+                    overallRating: overallRating,
+                    // 개별 모델 답변 및 점수
+                    results: currentEvaluationResult.comparisonData.map((d, i) => ({
+                        model_name: d.model_name,
+                        answer: d.answer,
+                        scores: currentEvaluationResult.aiVerdict.evaluation[i].scores,
+                        summary: currentEvaluationResult.aiVerdict.evaluation[i].summary
+                    }))
+                }
+            };
+
+            document.getElementById('saveFinalBtn').disabled = true;
+            document.getElementById('saveFinalBtn').textContent = '저장 중...';
+
+            await postToAction(saveData, () => {
+                alert('최종 평가가 성공적으로 저장되었습니다.');
+                elements.resultDiv.classList.add('hidden');
+                currentEvaluationResult = null;
+                loadInitialData(); // 전체 데이터 다시 로드
+            });
+            
+            document.getElementById('saveFinalBtn').disabled = false;
+            document.getElementById('saveFinalBtn').textContent = '최종 평가 저장';
         }
 
         async function postToAction(payload, onSuccess) {
@@ -294,7 +339,6 @@
 
                 {
                   "evaluation": [
-                    // One object for each answer in the order they were provided
                     {
                       "model_name": /* model name from input */,
                       "scores": { "accuracy": /* 1-10 */, "relevance": /* 1-10 */, "completeness": /* 1-10 */, "clarity": /* 1-10 */, "helpfulness": /* 1-10 */ },
@@ -322,7 +366,6 @@
             
             if (result.candidates && result.candidates[0].content.parts.length > 0) {
                 const parsedResult = JSON.parse(result.candidates[0].content.parts[0].text);
-                // API가 모델 이름을 잘못 출력할 경우를 대비해 프론트엔드에서 받은 이름으로 교정
                 parsedResult.evaluation.forEach((evalItem, index) => {
                     evalItem.model_name = comparisonData[index].model_name;
                 });
@@ -332,19 +375,45 @@
             }
         }
 
-        function displaySingleResult(data) {
+        function displayAiAnalysis(data) {
             const resultHtml = `
-                <div class="bg-white p-6 rounded-2xl shadow-lg mb-8 text-center">
-                    <h2 class="text-2xl font-bold mb-2">종합 평가</h2>
-                    <p class="text-3xl font-bold">🏆 ${data.verdict.winner}의 승리!</p>
+                <div class="bg-blue-50 p-6 rounded-2xl border border-blue-200 text-center">
+                    <h2 class="text-2xl font-bold mb-2 text-blue-800">AI 자동 분석 결과</h2>
+                    <p class="text-3xl font-bold">🏆 ${data.verdict.winner}의 승리 (AI 추천)</p>
                     <p class="text-gray-600 mt-4 mx-auto max-w-3xl">${data.verdict.reasoning}</p>
                 </div>
                 <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
                     ${data.evaluation.map(createResultCard).join('')}
                 </div>
             `;
-            elements.resultDiv.innerHTML = resultHtml;
+            elements.aiAnalysisResult.innerHTML = resultHtml;
             elements.resultDiv.classList.remove('hidden');
+        }
+
+        function displayUserEvaluationForm(aiResult, modelNames) {
+            const winnerOptions = modelNames.map(name => `<option value="${name}" ${aiResult.verdict.winner === name ? 'selected' : ''}>${name}</option>`).join('');
+            const formHtml = `
+                <h2 class="text-2xl font-bold mb-6 text-center text-gray-800">최종 평가 및 저장</h2>
+                <div class="space-y-6 max-w-2xl mx-auto">
+                    <div>
+                        <label for="winnerSelect" class="block text-lg font-semibold mb-2 text-gray-700">최종 승리 모델 선택</label>
+                        <select id="winnerSelect" class="w-full p-3 border border-gray-300 rounded-lg bg-white">${winnerOptions}</select>
+                    </div>
+                    <div>
+                        <label for="overallRating" class="block text-lg font-semibold mb-2 text-gray-700">종합 평점 (1~5점)</label>
+                        <input type="number" id="overallRating" min="1" max="5" class="w-full p-3 border border-gray-300 rounded-lg" value="5">
+                    </div>
+                    <div>
+                        <label for="userComments" class="block text-lg font-semibold mb-2 text-gray-700">추가 코멘트</label>
+                        <textarea id="userComments" rows="4" class="w-full p-3 border border-gray-300 rounded-lg" placeholder="최종 평가에 대한 의견을 남겨주세요."></textarea>
+                    </div>
+                    <div class="text-center pt-4">
+                        <button id="saveFinalBtn" onclick="handleSaveFinalEvaluation()" class="bg-red-600 text-white font-bold py-3 px-8 rounded-lg hover:bg-red-700 transition text-lg">최종 평가 저장</button>
+                    </div>
+                </div>
+            `;
+            elements.userEvaluationSection.innerHTML = formHtml;
+            elements.userEvaluationSection.classList.remove('hidden');
         }
 
         function createResultCard(evalData) {
@@ -420,8 +489,9 @@
                             <i class="fas fa-chevron-down transition-transform flex-shrink-0"></i>
                         </div>
                         <div class="history-item-content bg-gray-50 p-4 border-t border-gray-200">
-                            <h4 class="font-bold text-lg mb-2">종합 평가: ${ev.WinnerModel}의 승리! 🏆</h4>
-                            <p class="text-gray-600 mb-4 italic">"${ev.OverallReasoning}"</p>
+                            <h4 class="font-bold text-lg mb-2">최종 평가: ${ev.UserWinner}의 승리! 🏆 (사용자 선택)</h4>
+                            <p class="text-gray-600 mb-2 italic">"${ev.UserComments || '코멘트 없음'}"</p>
+                            <p class="text-sm text-gray-500 mb-4">종합 평점: ${ev.OverallRating} / 5</p>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 ${ev.results.map(res => `
                                     <div>
