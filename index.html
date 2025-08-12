@@ -82,7 +82,8 @@
     </div>
 
     <script>
-        const GAS_WEB_APP_URL = '__GAS_URL_PLACEHOLDER__'; // 이 값은 GitHub Actions에 의해 자동으로 교체됩니다.
+        // 이 값은 GitHub Actions에 의해 자동으로 교체됩니다.
+        const GAS_WEB_APP_URL = '__GAS_URL_PLACEHOLDER__'; 
 
         // DOM 요소
         const elements = {
@@ -114,7 +115,7 @@
 
         async function loadInitialData() {
             if (!GAS_WEB_APP_URL || GAS_WEB_APP_URL.includes('__GAS_URL_PLACEHOLDER__')) {
-                showError('배포 URL이 설정되지 않았습니다. GitHub Actions를 통해 배포해주세요.');
+                showError('배포 URL이 설정되지 않았습니다. GitHub Actions를 통해 배포했는지, GitHub Secret (GAS_URL)이 올바른지 확인해주세요.');
                 elements.initialLoader.style.display = 'none';
                 return;
             }
@@ -439,7 +440,6 @@
             }
         }
 
-        // --- BUG FIX: displayHistory 함수 수정 ---
         function displayHistory() {
             elements.historySection.innerHTML = '';
             if (!state.evaluations || state.evaluations.length === 0) {
@@ -463,7 +463,6 @@
                 let winnerLabel = '정보 없음';
                 let reviewHtml = '<p class="text-gray-500">이전 버전의 평가 기록입니다.</p>';
 
-                // 최신 데이터 형식 (사용자 평가 존재)
                 if (ev.hasOwnProperty('UserWinner') && ev.UserWinner) {
                     winner = ev.UserWinner;
                     winnerLabel = '사용자 선택';
@@ -472,13 +471,11 @@
                         <p class="text-sm text-gray-500 mb-4">종합 평점: ${ev.OverallRating || 'N/A'} / 5</p>
                     `;
                 } 
-                // 구형 데이터 형식 (AI 평가만 존재)
                 else if (ev.hasOwnProperty('AI_Winner') && ev.AI_Winner) {
                     winner = ev.AI_Winner;
                     winnerLabel = 'AI 추천';
                     reviewHtml = `<p class="text-gray-600 mb-4 italic">"${ev.AI_Reasoning || 'AI 코멘트 없음'}"</p>`;
                 }
-                 // 더 오래된 데이터 형식 (WinnerModel 속성 확인)
                 else if (ev.hasOwnProperty('WinnerModel') && ev.WinnerModel) {
                     winner = ev.WinnerModel;
                     winnerLabel = 'AI 추천';
