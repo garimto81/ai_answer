@@ -82,7 +82,7 @@
     </div>
 
     <script>
-        const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyYoMradeF3e6ybkixgt_fGis5A8sFsEVOUm9AgMXtW4IfXwhRs-RzCH4qXA-xyHqdoVQ/exec'; // <--- 여기에 URL 붙여넣기
+        const GAS_WEB_APP_URL = '__GAS_URL_PLACEHOLDER__'; // 이 값은 GitHub Actions에 의해 자동으로 교체됩니다.
 
         // DOM 요소
         const elements = {
@@ -113,8 +113,8 @@
         elements.analyzeBtn.addEventListener('click', handleAnalysis);
 
         async function loadInitialData() {
-            if (!GAS_WEB_APP_URL || GAS_WEB_APP_URL.includes('AKfycbw...')) {
-                showError('Google Apps Script URL이 설정되지 않았습니다. 코드의 GAS_WEB_APP_URL 변수를 교체해주세요.');
+            if (!GAS_WEB_APP_URL || GAS_WEB_APP_URL.includes('__GAS_URL_PLACEHOLDER__')) {
+                showError('배포 URL이 설정되지 않았습니다. GitHub Actions를 통해 배포해주세요.');
                 elements.initialLoader.style.display = 'none';
                 return;
             }
@@ -238,7 +238,7 @@
             hideError();
 
             try {
-                const evaluationResult = await getEvaluationFromAI(question, comparisonData);
+                const evaluationResult = await getEvaluationFromAIProxy(question, comparisonData);
 
                 if (!evaluationResult || !evaluationResult.verdict || !evaluationResult.evaluation || !evaluationResult.verdict.winner) {
                     throw new Error("AI 분석 결과의 형식이 올바르지 않습니다. 다시 시도해주세요.");
@@ -273,14 +273,11 @@
                 action: 'saveEvaluation',
                 data: {
                     question: currentEvaluationResult.question,
-                    // AI 분석 결과
                     aiWinner: currentEvaluationResult.aiVerdict.verdict.winner,
                     aiReasoning: currentEvaluationResult.aiVerdict.verdict.reasoning,
-                    // 사용자 최종 평가
                     userWinner: userWinner,
                     userComments: userComments,
                     overallRating: overallRating,
-                    // 개별 모델 답변 및 점수
                     results: currentEvaluationResult.comparisonData.map((d, i) => ({
                         model_name: d.model_name,
                         answer: d.answer,
@@ -297,7 +294,7 @@
                 alert('최종 평가가 성공적으로 저장되었습니다.');
                 elements.resultDiv.classList.add('hidden');
                 currentEvaluationResult = null;
-                loadInitialData(); // 전체 데이터 다시 로드
+                loadInitialData();
             });
             
             document.getElementById('saveFinalBtn').disabled = false;
@@ -311,9 +308,9 @@
                     headers: { 'Content-Type': 'text/plain' },
                     body: JSON.stringify(payload)
                 });
-                if (!response.ok) throw new Error('요청 처리 실패');
+                if (!response.ok) throw new Error(`요청 처리 실패: ${response.statusText}`);
                 const result = await response.json();
-                if (result.success) {
+                if (result.success || (payload.action === 'getAiEvaluation' && result.candidates)) {
                     onSuccess(result);
                 } else {
                     throw new Error(result.message || '알 수 없는 서버 오류');
@@ -324,46 +321,21 @@
             }
         }
         
-        async function getEvaluationFromAI(question, comparisonData) {
-            const apiKey = "AIzaSyBB8uqP1ECTe40jknSy5XK71TCs8_KbGV0";
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
-
-            const answersString = comparisonData.map((data, index) => `**Answer ${index + 1} (${data.model_name}):**\n${data.answer}`).join('\n\n');
-            const modelNames = comparisonData.map(d => `'${d.model_name}'`).join(' or ');
-
-            const prompt = `
-                You are a fair and expert AI performance evaluator. Analyze and compare the multiple 'Answers' for the given 'Question' based on the following criteria: Accuracy, Relevance, Completeness, Clarity, Helpfulness.
-
-                **Output Format:**
-                You MUST respond ONLY with a JSON object in the following format. The order in the "evaluation" array must match the order of the answers provided.
-
-                {
-                  "evaluation": [
-                    {
-                      "model_name": /* model name from input */,
-                      "scores": { "accuracy": /* 1-10 */, "relevance": /* 1-10 */, "completeness": /* 1-10 */, "clarity": /* 1-10 */, "helpfulness": /* 1-10 */ },
-                      "summary": "A concise summary in Korean about this specific answer."
-                    }
-                  ],
-                  "verdict": {
-                    "winner": /* One of ${modelNames} */,
-                    "reasoning": "A comprehensive comparison in Korean explaining why the winning answer is superior overall."
-                  }
-                }
-
-                **Content to Analyze:**
-                **Question:**
-                ${question}
-
-                ${answersString}
-            `;
+        async function getEvaluationFromAIProxy(question, comparisonData) {
+            const payload = {
+                action: 'getAiEvaluation',
+                data: { question, comparisonData }
+            };
             
-            const payload = { contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseMimeType: "application/json" } };
-            const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            const response = await fetch(GAS_WEB_APP_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify(payload)
+            });
 
-            if (!response.ok) throw new Error(`API call failed: ${response.status}`);
+            if (!response.ok) throw new Error(`AI 분석 프록시 호출 실패: ${response.statusText}`);
             const result = await response.json();
-            
+
             if (result.candidates && result.candidates[0].content.parts.length > 0) {
                 const parsedResult = JSON.parse(result.candidates[0].content.parts[0].text);
                 parsedResult.evaluation.forEach((evalItem, index) => {
@@ -371,7 +343,8 @@
                 });
                 return parsedResult;
             } else {
-                throw new Error("Invalid response from Gemini API.");
+                if(result.message) throw new Error(result.message);
+                throw new Error("AI 프록시로부터 유효하지 않은 응답을 받았습니다.");
             }
         }
 
@@ -466,37 +439,69 @@
             }
         }
 
+        // --- BUG FIX: displayHistory 함수 수정 ---
         function displayHistory() {
             elements.historySection.innerHTML = '';
-            if (state.evaluations.length === 0) {
+            if (!state.evaluations || state.evaluations.length === 0) {
                 elements.historySection.innerHTML = `<div class="bg-white p-6 rounded-lg shadow text-center text-gray-500">평가 기록이 없습니다.</div>`;
                 return;
             }
-            state.evaluations.slice().reverse().forEach((ev, index) => {
+            state.evaluations.slice().reverse().forEach((ev) => {
+                if (!ev || !ev.results) return; // 잘못된 레코드 건너뛰기
+
                 const scoresSummary = ev.results.map(res => {
-                    const scores = JSON.parse(res.ScoresJSON);
-                    const avg = (Object.values(scores).reduce((a, b) => a + b, 0) / Object.keys(scores).length).toFixed(1);
-                    return `<span>${res.ModelName}: <strong class="text-blue-600">${avg}점</strong></span>`;
+                    try {
+                        const scores = JSON.parse(res.ScoresJSON || '{}');
+                        const avg = (Object.values(scores).reduce((a, b) => a + b, 0) / (Object.keys(scores).length || 1)).toFixed(1);
+                        return `<span>${res.ModelName || 'N/A'}: <strong class="text-blue-600">${avg}점</strong></span>`;
+                    } catch (e) {
+                        return `<span>${res.ModelName || 'N/A'}: <strong class="text-red-500">점수 오류</strong></span>`;
+                    }
                 }).join('<span class="mx-2 text-gray-400">vs</span>');
+
+                let winner = 'N/A';
+                let winnerLabel = '정보 없음';
+                let reviewHtml = '<p class="text-gray-500">이전 버전의 평가 기록입니다.</p>';
+
+                // 최신 데이터 형식 (사용자 평가 존재)
+                if (ev.hasOwnProperty('UserWinner') && ev.UserWinner) {
+                    winner = ev.UserWinner;
+                    winnerLabel = '사용자 선택';
+                    reviewHtml = `
+                        <p class="text-gray-600 mb-2 italic">"${ev.UserComments || '코멘트 없음'}"</p>
+                        <p class="text-sm text-gray-500 mb-4">종합 평점: ${ev.OverallRating || 'N/A'} / 5</p>
+                    `;
+                } 
+                // 구형 데이터 형식 (AI 평가만 존재)
+                else if (ev.hasOwnProperty('AI_Winner') && ev.AI_Winner) {
+                    winner = ev.AI_Winner;
+                    winnerLabel = 'AI 추천';
+                    reviewHtml = `<p class="text-gray-600 mb-4 italic">"${ev.AI_Reasoning || 'AI 코멘트 없음'}"</p>`;
+                }
+                 // 더 오래된 데이터 형식 (WinnerModel 속성 확인)
+                else if (ev.hasOwnProperty('WinnerModel') && ev.WinnerModel) {
+                    winner = ev.WinnerModel;
+                    winnerLabel = 'AI 추천';
+                    reviewHtml = `<p class="text-gray-600 mb-4 italic">"${ev.OverallReasoning || 'AI 코멘트 없음'}"</p>`;
+                }
 
                 const itemHtml = `
                     <div class="bg-white rounded-lg shadow-md overflow-hidden">
                         <div class="p-4 cursor-pointer hover:bg-gray-50 flex justify-between items-center" onclick="toggleHistory(this)">
                             <div class="flex-grow overflow-hidden pr-4">
-                                <p class="font-semibold text-gray-800 truncate">${ev.Question}</p>
+                                <p class="font-semibold text-gray-800 truncate" title="${ev.Question || ''}">${ev.Question || '질문 없음'}</p>
                                 <div class="text-sm text-gray-500 mt-1 flex flex-wrap gap-x-2 gap-y-1">${scoresSummary}</div>
                             </div>
                             <i class="fas fa-chevron-down transition-transform flex-shrink-0"></i>
                         </div>
                         <div class="history-item-content bg-gray-50 p-4 border-t border-gray-200">
-                            <h4 class="font-bold text-lg mb-2">최종 평가: ${ev.UserWinner}의 승리! 🏆 (사용자 선택)</h4>
-                            <p class="text-gray-600 mb-2 italic">"${ev.UserComments || '코멘트 없음'}"</p>
-                            <p class="text-sm text-gray-500 mb-4">종합 평점: ${ev.OverallRating} / 5</p>
+                            <h4 class="font-bold text-lg mb-2">최종 평가: ${winner}의 승리! 🏆 (${winnerLabel})</h4>
+                            ${reviewHtml}
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 ${ev.results.map(res => `
                                     <div>
-                                        <h5 class="font-semibold mb-2">${res.ModelName}의 답변</h5>
-                                        <p class="text-sm bg-white p-3 rounded whitespace-pre-wrap">${res.Answer}</p>
+                                        <h5 class="font-semibold mb-2">${res.ModelName || 'N/A'}의 답변</h5>
+                                        <p class="text-sm bg-white p-3 rounded whitespace-pre-wrap">${res.Answer || '답변 없음'}</p>
                                     </div>
                                 `).join('')}
                             </div>
