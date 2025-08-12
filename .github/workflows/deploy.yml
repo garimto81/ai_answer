@@ -33,10 +33,9 @@ jobs:
       
       - name: Replace GAS URL Placeholder
         # HTML 파일 내의 플레이스홀더를 GitHub Secret 값으로 교체합니다.
-        # index.html을 사용하는 경우, 아래 파일 이름을 맞게 수정하세요.
+        # 이 워크플로우는 'index.html' 파일을 대상으로 작동합니다. 파일 이름이 다른 경우 이 부분을 수정하세요.
         run: |
-          sed -i "s|__GAS_URL_PLACEHOLDER__|${{ secrets.GAS_URL }}|g" ai_answer_evaluator_v3.html
-        # 주의: 위 파일 이름 'ai_answer_evaluator_v3.html'이 실제 파일 이름과 일치하는지 확인하세요.
+          sed -i "s|__GAS_URL_PLACEHOLDER__|${{ secrets.GAS_URL }}|g" index.html
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
@@ -44,8 +43,8 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          # ai_answer_evaluator_v3.html 파일이 있는 폴더를 업로드합니다.
-          # 만약 루트 디렉토리에 있다면 '.'을 사용합니다.
+          # 배포할 파일이 있는 폴더를 업로드합니다.
+          # 루트 디렉토리에 있다면 '.'을 사용합니다.
           path: '.'
           
       - name: Deploy to GitHub Pages
