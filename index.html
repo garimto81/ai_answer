@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 답변 비교 분석 툴 (DB 연동)</title>
+    <title>AI 답변 비교 분석 툴 (다중 모델 지원)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -11,8 +11,6 @@
         body { font-family: 'Noto Sans KR', sans-serif; }
         .loader { border: 5px solid #f3f3f3; border-top: 5px solid #3498db; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .card-enter { opacity: 0; transform: translateY(20px); transition: opacity 0.5s ease, transform 0.5s ease; }
-        .card-enter-active { opacity: 1; transform: translateY(0); }
         .history-item-content { max-height: 0; overflow: hidden; transition: max-height 0.5s ease-in-out; }
     </style>
 </head>
@@ -21,123 +19,97 @@
     <div class="container mx-auto p-4 md:p-8 max-w-7xl">
         <header class="text-center mb-8">
             <h1 class="text-3xl md:text-4xl font-bold text-gray-900">AI 답변 비교 분석 툴</h1>
-            <p class="text-gray-600 mt-2">Google Sheets와 연동하여 AI 모델의 답변을 분석, 평가하고 기록을 관리합니다.</p>
+            <p class="text-gray-600 mt-2">여러 AI 모델의 답변을 동시에 분석, 평가하고 기록을 관리합니다.</p>
         </header>
 
         <!-- 평균 점수 섹션 -->
         <div class="mb-8">
             <h2 class="text-2xl font-bold mb-4 text-gray-800">모델별 평균 점수</h2>
-            <div id="averageScoresSection" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <!-- 평균 점수 카드가 여기에 동적으로 추가됩니다. -->
+            <div id="averageScoresSection" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                  <div id="initialLoader" class="flex items-center justify-center col-span-full h-24">
-                    <div class="loader !w-10 !h-10"></div>
-                    <p class="ml-4 text-lg text-gray-600">데이터를 불러오는 중입니다...</p>
+                    <div class="loader !w-10 !h-10"></div><p class="ml-4 text-lg text-gray-600">데이터를 불러오는 중입니다...</p>
                 </div>
             </div>
         </div>
 
-        <!-- 모델 관리 및 입력 섹션 -->
+        <!-- 모델 관리 섹션 -->
+        <div class="bg-white p-6 rounded-2xl shadow-lg mb-8">
+            <h2 class="text-2xl font-bold mb-4 text-gray-800">AI 모델 관리</h2>
+            <div class="flex items-center gap-2 mb-4">
+                <input type="text" id="newModelName" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" placeholder="새로운 AI 모델 이름 등록">
+                <button id="registerModelBtn" class="bg-indigo-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-indigo-700 transition flex-shrink-0">등록</button>
+            </div>
+            <div id="modelList" class="space-y-2">
+                <!-- 등록된 모델 목록이 여기에 동적으로 표시됩니다. -->
+            </div>
+        </div>
+
+        <!-- 입력 섹션 -->
         <div class="bg-white p-6 rounded-2xl shadow-lg mb-8">
             <div class="grid grid-cols-1 gap-6">
-                <!-- 모델 관리 -->
-                <div>
-                    <label class="block text-lg font-semibold mb-2 text-gray-700">AI 모델 관리</label>
-                    <div class="flex items-center gap-2">
-                        <input type="text" id="newModelName" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" placeholder="새로운 AI 모델 이름 등록 (예: Claude 3)">
-                        <button id="registerModelBtn" class="bg-indigo-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-indigo-700 transition">등록</button>
-                    </div>
-                </div>
-
-                <!-- 질문 입력 -->
                 <div>
                     <label for="question" class="block text-lg font-semibold mb-2 text-gray-700">질문 (Question)</label>
                     <textarea id="question" rows="3" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 transition" placeholder="분석하고 싶은 질문을 입력하세요."></textarea>
                 </div>
-
-                <!-- 답변 입력 -->
-                <div class="grid md:grid-cols-2 gap-6">
-                    <div>
-                        <label for="modelA" class="block text-lg font-semibold mb-2 text-gray-700">모델 A 선택</label>
-                        <select id="modelA" class="w-full p-3 border border-gray-300 rounded-lg bg-white"></select>
-                        <textarea id="answerA" rows="8" class="mt-2 w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 transition" placeholder="모델 A의 답변을 입력하세요."></textarea>
-                    </div>
-                    <div>
-                        <label for="modelB" class="block text-lg font-semibold mb-2 text-gray-700">모델 B 선택</label>
-                        <select id="modelB" class="w-full p-3 border border-gray-300 rounded-lg bg-white"></select>
-                        <textarea id="answerB" rows="8" class="mt-2 w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 transition" placeholder="모델 B의 답변을 입력하세요."></textarea>
-                    </div>
+                <div id="comparisonContainer" class="space-y-6">
+                    <!-- 비교할 모델 입력 필드가 여기에 동적으로 추가됩니다. -->
+                </div>
+                 <div class="flex justify-center gap-4 mt-4">
+                    <button id="addModelBtn" class="bg-green-600 text-white font-bold py-2 px-5 rounded-lg hover:bg-green-700 transition"><i class="fas fa-plus mr-2"></i>비교 모델 추가</button>
                 </div>
             </div>
-            <div class="text-center mt-6">
-                <button id="analyzeBtn" class="bg-blue-600 text-white font-bold py-3 px-8 rounded-lg hover:bg-blue-700 transition-transform transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-blue-300">
+            <div class="text-center mt-8">
+                <button id="analyzeBtn" class="bg-blue-600 text-white font-bold py-3 px-8 rounded-lg hover:bg-blue-700 transition-transform transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-blue-300 text-lg">
                     분석 시작
                 </button>
             </div>
         </div>
 
-        <!-- 로딩 및 결과 섹션 -->
-        <div id="loading" class="hidden justify-center items-center my-8">
-            <div class="loader"></div>
-            <p class="ml-4 text-lg text-gray-600">AI 평가자가 답변을 분석 중입니다...</p>
-        </div>
+        <div id="loading" class="hidden justify-center items-center my-8"><div class="loader"></div><p class="ml-4 text-lg text-gray-600">AI 평가자가 답변을 분석 중입니다...</p></div>
         <div id="result" class="hidden"></div>
         
-        <!-- 평가 기록 섹션 -->
-        <div class="mt-12">
-            <h2 class="text-2xl font-bold mb-4 text-gray-800">평가 기록</h2>
-            <div id="historySection" class="space-y-4">
-                <!-- 평가 기록이 여기에 동적으로 추가됩니다. -->
-            </div>
-        </div>
+        <div class="mt-12"><h2 class="text-2xl font-bold mb-4 text-gray-800">평가 기록</h2><div id="historySection" class="space-y-4"></div></div>
         
-        <!-- 에러 메시지 -->
         <div id="error" class="hidden fixed top-5 right-5 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg shadow-lg z-50" role="alert">
-            <strong class="font-bold">오류 발생!</strong>
-            <span class="block sm:inline" id="errorMessage"></span>
-            <span class="absolute top-0 bottom-0 right-0 px-4 py-3" onclick="hideError()">
-                <svg class="fill-current h-6 w-6 text-red-500" role="button" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><title>Close</title><path d="M14.348 14.849a1.2 1.2 0 0 1-1.697 0L10 11.819l-2.651 3.029a1.2 1.2 0 1 1-1.697-1.697l2.758-3.15-2.759-3.152a1.2 1.2 0 1 1 1.697-1.697L10 8.183l2.651-3.031a1.2 1.2 0 1 1 1.697 1.697l-2.758 3.152 2.758 3.15a1.2 1.2 0 0 1 0 1.698z"/></svg>
-            </span>
+            <strong class="font-bold">오류 발생!</strong> <span class="block sm:inline" id="errorMessage"></span>
+            <span class="absolute top-0 bottom-0 right-0 px-4 py-3" onclick="hideError()"><i class="fas fa-times cursor-pointer"></i></span>
         </div>
     </div>
 
     <script>
-        // 중요: 이 URL을 1단계에서 배포한 Google Apps Script 웹 앱 URL로 교체하세요.
         const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyYoMradeF3e6ybkixgt_fGis5A8sFsEVOUm9AgMXtW4IfXwhRs-RzCH4qXA-xyHqdoVQ/exec'; // <--- 여기에 URL 붙여넣기
 
         // DOM 요소
         const elements = {
             analyzeBtn: document.getElementById('analyzeBtn'),
             registerModelBtn: document.getElementById('registerModelBtn'),
+            addModelBtn: document.getElementById('addModelBtn'),
             loading: document.getElementById('loading'),
             resultDiv: document.getElementById('result'),
             errorDiv: document.getElementById('error'),
             errorMessage: document.getElementById('errorMessage'),
             averageScoresSection: document.getElementById('averageScoresSection'),
             historySection: document.getElementById('historySection'),
-            modelASelect: document.getElementById('modelA'),
-            modelBSelect: document.getElementById('modelB'),
+            modelList: document.getElementById('modelList'),
+            comparisonContainer: document.getElementById('comparisonContainer'),
             initialLoader: document.getElementById('initialLoader')
         };
 
         // 전역 상태
-        let state = {
-            models: [],
-            evaluations: []
-        };
+        let state = { models: [], evaluations: [] };
 
         // 초기화
         window.addEventListener('DOMContentLoaded', loadInitialData);
+        elements.registerModelBtn.addEventListener('click', handleRegisterModel);
+        elements.addModelBtn.addEventListener('click', () => addComparisonField());
+        elements.analyzeBtn.addEventListener('click', handleAnalysis);
 
         async function loadInitialData() {
-            // URL이 placeholder인지 확인하는 로직 추가
             if (!GAS_WEB_APP_URL || GAS_WEB_APP_URL.includes('AKfycbw...')) {
-                showError('Google Apps Script URL이 설정되지 않았습니다. 코드의 GAS_WEB_APP_URL 변수를 실제 배포된 웹 앱 URL로 교체해주세요.');
+                showError('Google Apps Script URL이 설정되지 않았습니다. 코드의 GAS_WEB_APP_URL 변수를 교체해주세요.');
                 elements.initialLoader.style.display = 'none';
-                elements.averageScoresSection.innerHTML = `<p class="text-red-500 col-span-full p-4 bg-red-50 rounded-lg"><b>설정 오류:</b> Google Apps Script URL을 먼저 설정해야 합니다.</p>`;
-                elements.historySection.innerHTML = `<div class="bg-white p-6 rounded-lg shadow text-center text-gray-500">데이터를 불러올 수 없습니다.</div>`;
-                return; // 함수 실행 중단
+                return;
             }
-
             elements.initialLoader.style.display = 'flex';
             try {
                 const response = await fetch(GAS_WEB_APP_URL);
@@ -148,346 +120,231 @@
                 updateFullUI();
             } catch (err) {
                 console.error('Initial data load error:', err);
-                showError('데이터를 불러오는데 실패했습니다. Google Apps Script URL이 올바르고, 배포 설정(모든 사용자에게 액세스 허용)이 정확한지 확인해주세요.');
-                elements.averageScoresSection.innerHTML = `<p class="text-red-500 col-span-full">데이터 로딩 실패. 설정을 확인하세요.</p>`;
+                showError('데이터를 불러오는데 실패했습니다. URL과 배포 설정을 확인해주세요.');
             } finally {
                  elements.initialLoader.style.display = 'none';
             }
         }
 
         function updateFullUI() {
-            updateModelDropdowns();
+            renderModelManagementList();
             calculateAndDisplayAverages();
             displayHistory();
+            // 초기 비교 필드 추가
+            elements.comparisonContainer.innerHTML = '';
+            addComparisonField();
+            addComparisonField();
+        }
+
+        function renderModelManagementList() {
+            elements.modelList.innerHTML = '';
+            if (state.models.length === 0) {
+                elements.modelList.innerHTML = '<p class="text-gray-500">등록된 모델이 없습니다.</p>';
+                return;
+            }
+            state.models.forEach(modelName => {
+                const div = document.createElement('div');
+                div.className = 'flex items-center justify-between bg-gray-50 p-2 rounded-lg';
+                div.innerHTML = `
+                    <span class="font-medium">${modelName}</span>
+                    <button class="text-red-500 hover:text-red-700" onclick="handleDeleteModel('${modelName}')"><i class="fas fa-trash-alt"></i></button>
+                `;
+                elements.modelList.appendChild(div);
+            });
         }
         
-        function updateModelDropdowns() {
-            [elements.modelASelect, elements.modelBSelect].forEach(select => {
-                select.innerHTML = '';
-                if (state.models.length === 0) {
-                    select.innerHTML = '<option disabled>등록된 모델이 없습니다.</option>';
-                } else {
-                    state.models.forEach(model => {
-                        const option = document.createElement('option');
-                        option.value = model;
-                        option.textContent = model;
-                        select.appendChild(option);
-                    });
-                }
-            });
-             if (state.models.length > 1) {
-                elements.modelASelect.value = state.models[0];
-                elements.modelBSelect.value = state.models[1];
-            } else if (state.models.length === 1) {
-                 elements.modelASelect.value = state.models[0];
-                 elements.modelBSelect.value = state.models[0];
-            }
-        }
-
-        function calculateAndDisplayAverages() {
-            const averageScores = {};
-            state.evaluations.forEach(ev => {
-                [JSON.parse(ev.ModelA_Scores_JSON), JSON.parse(ev.ModelB_Scores_JSON)].forEach(modelScore => {
-                    const modelName = modelScore.model_name.startsWith('답변') ? (modelScore.model_name === '답변 A' ? ev.ModelA_Name : ev.ModelB_Name) : modelScore.model_name;
-                    if (!averageScores[modelName]) {
-                        averageScores[modelName] = { total: 0, count: 0, criteria: {} };
-                    }
-                    let currentTotal = 0;
-                    let criteriaCount = 0;
-                    for (const [key, value] of Object.entries(modelScore.scores)) {
-                         if (!averageScores[modelName].criteria[key]) {
-                            averageScores[modelName].criteria[key] = { total: 0, count: 0 };
-                        }
-                        averageScores[modelName].criteria[key].total += value;
-                        averageScores[modelName].criteria[key].count++;
-                        currentTotal += value;
-                        criteriaCount++;
-                    }
-                    averageScores[modelName].total += currentTotal / criteriaCount;
-                    averageScores[modelName].count++;
-                });
-            });
-
-            elements.averageScoresSection.innerHTML = '';
-            if (Object.keys(averageScores).length === 0 && state.models.length > 0) {
-                elements.averageScoresSection.innerHTML = `<p class="text-gray-500 col-span-full">아직 평가 기록이 없습니다.</p>`;
-                return;
-            }
-
-            for (const modelName in averageScores) {
-                const avg = (averageScores[modelName].total / averageScores[modelName].count).toFixed(2);
-                const card = document.createElement('div');
-                card.className = 'bg-white p-4 rounded-lg shadow';
-                card.innerHTML = `
-                    <h3 class="font-bold text-lg">${modelName}</h3>
-                    <p class="text-3xl font-bold text-blue-600">${avg}</p>
-                    <p class="text-sm text-gray-500">${averageScores[modelName].count}회 평가</p>
-                `;
-                elements.averageScoresSection.appendChild(card);
-            }
-        }
-
-        function displayHistory() {
-            elements.historySection.innerHTML = '';
-             if (state.evaluations.length === 0) {
-                elements.historySection.innerHTML = `<div class="bg-white p-6 rounded-lg shadow text-center text-gray-500">평가 기록이 없습니다.</div>`;
-                return;
-            }
-            state.evaluations.slice().reverse().forEach((ev, index) => {
-                const item = document.createElement('div');
-                item.className = 'bg-white rounded-lg shadow-md overflow-hidden';
-                const scoresA = JSON.parse(ev.ModelA_Scores_JSON).scores;
-                const scoresB = JSON.parse(ev.ModelB_Scores_JSON).scores;
-                const totalA = Object.values(scoresA).reduce((a, b) => a + b, 0);
-                const totalB = Object.values(scoresB).reduce((a, b) => a + b, 0);
-                const avgA = (totalA / Object.keys(scoresA).length).toFixed(1);
-                const avgB = (totalB / Object.keys(scoresB).length).toFixed(1);
-
-                item.innerHTML = `
-                    <div id="history-header-${index}" class="p-4 cursor-pointer hover:bg-gray-50 flex justify-between items-center">
-                        <div class="flex-grow overflow-hidden pr-4">
-                            <p class="font-semibold text-gray-800 truncate">${ev.Question}</p>
-                            <div class="text-sm text-gray-500 mt-1 flex flex-wrap gap-x-4 gap-y-1">
-                                <span>${ev.ModelA_Name}: <strong class="text-blue-600">${avgA}점</strong></span>
-                                <span class="text-gray-400">vs</span>
-                                <span>${ev.ModelB_Name}: <strong class="text-green-600">${avgB}점</strong></span>
-                                <span class="text-xs text-gray-400 self-center">${new Date(ev.Timestamp).toLocaleString()}</span>
-                            </div>
-                        </div>
-                        <i class="fas fa-chevron-down transition-transform flex-shrink-0"></i>
-                    </div>
-                    <div id="history-content-${index}" class="history-item-content bg-gray-50 p-4 border-t border-gray-200">
-                        <h4 class="font-bold text-lg mb-2">종합 평가: ${ev.Winner}의 승리! 🏆</h4>
-                        <p class="text-gray-600 mb-4 italic">"${ev.Reasoning}"</p>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <h5 class="font-semibold mb-2">${ev.ModelA_Name}의 답변</h5>
-                                <p class="text-sm bg-white p-3 rounded whitespace-pre-wrap">${ev.AnswerA}</p>
-                            </div>
-                            <div>
-                                <h5 class="font-semibold mb-2">${ev.ModelB_Name}의 답변</h5>
-                                <p class="text-sm bg-white p-3 rounded whitespace-pre-wrap">${ev.AnswerB}</p>
-                            </div>
-                        </div>
-                    </div>
-                `;
-                elements.historySection.appendChild(item);
-            });
+        function addComparisonField(modelName = null) {
+            const fieldId = `comparison-${Date.now()}`;
+            const div = document.createElement('div');
+            div.id = fieldId;
+            div.className = 'p-4 border border-gray-200 rounded-lg relative';
             
-            // 펼치기/접기 이벤트 리스너 추가
-            document.querySelectorAll('[id^="history-header-"]').forEach(header => {
-                header.addEventListener('click', () => {
-                    const content = header.nextElementSibling;
-                    const icon = header.querySelector('i');
-                    if (content.style.maxHeight && content.style.maxHeight !== '0px') {
-                        content.style.maxHeight = '0px';
-                        icon.style.transform = 'rotate(0deg)';
-                    } else {
-                        content.style.maxHeight = content.scrollHeight + 'px';
-                        icon.style.transform = 'rotate(180deg)';
-                    }
+            let optionsHtml = state.models.map(m => `<option value="${m}" ${m === modelName ? 'selected' : ''}>${m}</option>`).join('');
+
+            div.innerHTML = `
+                <button class="absolute top-2 right-2 text-gray-400 hover:text-red-600" onclick="document.getElementById('${fieldId}').remove()"><i class="fas fa-times-circle"></i></button>
+                <div class="grid grid-cols-1 gap-4">
+                    <div>
+                        <label class="block text-md font-semibold mb-2 text-gray-700">모델 선택</label>
+                        <select class="model-select w-full p-3 border border-gray-300 rounded-lg bg-white">${optionsHtml}</select>
+                    </div>
+                    <div>
+                        <label class="block text-md font-semibold mb-2 text-gray-700">답변 입력</label>
+                        <textarea class="answer-textarea w-full p-3 border border-gray-300 rounded-lg" rows="8" placeholder="모델의 답변을 입력하세요."></textarea>
+                    </div>
+                </div>
+            `;
+            elements.comparisonContainer.appendChild(div);
+            // 새로 추가된 필드에 모델 자동 선택 로직 적용
+            const allSelects = elements.comparisonContainer.querySelectorAll('.model-select');
+            const lastSelect = allSelects[allSelects.length - 1];
+            if (state.models.length > 0) {
+                const usedModels = Array.from(allSelects).map(s => s.value);
+                const availableModel = state.models.find(m => !usedModels.slice(0, -1).includes(m));
+                lastSelect.value = availableModel || state.models[0];
+            }
+        }
+
+        async function handleRegisterModel() {
+            const newModelName = document.getElementById('newModelName').value.trim();
+            if (!newModelName) return showError('모델 이름을 입력해주세요.');
+            if (state.models.includes(newModelName)) return showError('이미 등록된 모델 이름입니다.');
+
+            await postToAction({ action: 'registerModel', modelName: newModelName }, () => {
+                state.models.push(newModelName);
+                renderModelManagementList();
+                // 모든 드롭다운에 새 모델 추가
+                document.querySelectorAll('.model-select').forEach(select => {
+                    const option = document.createElement('option');
+                    option.value = newModelName;
+                    option.textContent = newModelName;
+                    select.appendChild(option);
                 });
+                document.getElementById('newModelName').value = '';
             });
         }
 
-        elements.registerModelBtn.addEventListener('click', async () => {
-            const newModelName = document.getElementById('newModelName').value.trim();
-            if (!newModelName) {
-                showError('모델 이름을 입력해주세요.');
-                return;
-            }
-            if (state.models.includes(newModelName)) {
-                showError('이미 등록된 모델 이름입니다.');
-                return;
-            }
-
-            try {
-                const response = await fetch(GAS_WEB_APP_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'text/plain' }, 
-                    body: JSON.stringify({ action: 'registerModel', modelName: newModelName })
-                });
-                if (!response.ok) throw new Error('모델 등록 실패');
-                const result = await response.json();
-                if (result.success) {
-                    state.models.push(newModelName);
-                    updateModelDropdowns();
-                    document.getElementById('newModelName').value = '';
-                } else {
-                    throw new Error(result.message || '알 수 없는 오류');
-                }
-            } catch (err) {
-                console.error('Model registration error:', err);
-                showError(`모델 등록 중 오류 발생: ${err.message}`);
-            }
-        });
-
-        elements.analyzeBtn.addEventListener('click', async () => {
+        async function handleDeleteModel(modelName) {
+            if (!confirm(`'${modelName}' 모델을 정말 삭제하시겠습니까? 관련된 평가 기록은 삭제되지 않습니다.`)) return;
+            await postToAction({ action: 'deleteModel', modelName: modelName }, () => {
+                state.models = state.models.filter(m => m !== modelName);
+                updateFullUI();
+            });
+        }
+        
+        async function handleAnalysis() {
             const question = document.getElementById('question').value.trim();
-            const answerA = document.getElementById('answerA').value.trim();
-            const answerB = document.getElementById('answerB').value.trim();
-            const modelA = elements.modelASelect.value;
-            const modelB = elements.modelBSelect.value;
+            if (!question) return showError('질문을 입력해주세요.');
+            
+            const comparisonFields = elements.comparisonContainer.children;
+            if (comparisonFields.length < 2) return showError('최소 2개 이상의 모델을 비교해야 합니다.');
 
-            if (!question || !answerA || !answerB || !modelA || !modelB) {
-                showError('모든 필드를 입력해주세요.');
-                return;
+            const comparisonData = [];
+            for (const field of comparisonFields) {
+                const model_name = field.querySelector('.model-select').value;
+                const answer = field.querySelector('.answer-textarea').value.trim();
+                if (!answer) return showError(`'${model_name}'의 답변을 입력해주세요.`);
+                comparisonData.push({ model_name, answer });
             }
-
-            hideError();
-            elements.resultDiv.classList.add('hidden');
+            
             elements.loading.classList.remove('hidden');
             elements.loading.classList.add('flex');
-            
+            elements.resultDiv.classList.add('hidden');
+            hideError();
+
             try {
-                // 1. Gemini API로 평가
-                const evaluation = await getEvaluationFromAI(question, answerA, answerB, modelA, modelB);
+                const evaluationResult = await getEvaluationFromAI(question, comparisonData);
                 
-                // 2. Google Sheet에 데이터 저장
                 const saveData = {
                     action: 'saveEvaluation',
                     data: {
-                        Timestamp: new Date().toISOString(),
-                        Question: question,
-                        ModelA_Name: modelA,
-                        AnswerA: answerA,
-                        ModelB_Name: modelB,
-                        AnswerB: answerB,
-                        ModelA_Scores_JSON: JSON.stringify(evaluation.evaluation[0]),
-                        ModelB_Scores_JSON: JSON.stringify(evaluation.evaluation[1]),
-                        Winner: evaluation.verdict.winner,
-                        Reasoning: evaluation.verdict.reasoning
+                        question: question,
+                        verdict: evaluationResult.verdict,
+                        evaluation: comparisonData.map((d, i) => ({ ...d, ...evaluationResult.evaluation[i] }))
                     }
                 };
                 
-                const saveResponse = await fetch(GAS_WEB_APP_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'text/plain' },
-                    body: JSON.stringify(saveData)
+                await postToAction(saveData, () => {
+                    // 성공적으로 저장 후 UI 업데이트
+                    loadInitialData(); // 전체 데이터 다시 로드
+                    displaySingleResult(evaluationResult);
                 });
-                if (!saveResponse.ok) throw new Error('평가 결과 저장 실패');
-                const saveResult = await saveResponse.json();
-                if (!saveResult.success) throw new Error(saveResult.message || '저장 중 알 수 없는 오류');
-
-                // 3. UI 업데이트
-                state.evaluations.push(saveData.data);
-                updateFullUI();
-                displaySingleResult(evaluation);
 
             } catch (err) {
-                console.error('Error during analysis:', err);
-                showError(`분석 중 오류가 발생했습니다: ${err.message}`);
+                console.error('Analysis error:', err);
+                showError(`분석 중 오류 발생: ${err.message}`);
             } finally {
                 elements.loading.classList.add('hidden');
                 elements.loading.classList.remove('flex');
             }
-        });
+        }
+
+        async function postToAction(payload, onSuccess) {
+             try {
+                const response = await fetch(GAS_WEB_APP_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify(payload)
+                });
+                if (!response.ok) throw new Error('요청 처리 실패');
+                const result = await response.json();
+                if (result.success) {
+                    onSuccess(result);
+                } else {
+                    throw new Error(result.message || '알 수 없는 서버 오류');
+                }
+            } catch (err) {
+                console.error('Action failed:', err);
+                showError(`작업 실패: ${err.message}`);
+            }
+        }
         
-        async function getEvaluationFromAI(question, answerA, answerB, modelAName, modelBName) {
-            const apiKey = "AIzaSyBB8uqP1ECTe40jknSy5XK71TCs8_KbGV0"; // API 키는 Canvas 환경에서 자동으로 제공됩니다.
+        async function getEvaluationFromAI(question, comparisonData) {
+            const apiKey = "AIzaSyBB8uqP1ECTe40jknSy5XK71TCs8_KbGV0";
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
 
-            const prompt = `
-                You are a fair and expert AI performance evaluator. Analyze and compare the two 'Answers' (A, B) for the given 'Question' based on the following criteria.
+            const answersString = comparisonData.map((data, index) => `**Answer ${index + 1} (${data.model_name}):**\n${data.answer}`).join('\n\n');
+            const modelNames = comparisonData.map(d => `'${d.model_name}'`).join(' or ');
 
-                **Evaluation Criteria:**
-                1.  **Accuracy:** Is the answer factually correct?
-                2.  **Relevance:** Does it directly address the user's query?
-                3.  **Completeness:** Does it cover all aspects of the question?
-                4.  **Clarity:** Is it easy to understand and logically structured?
-                5.  **Helpfulness:** Is it practically useful for the user?
+            const prompt = `
+                You are a fair and expert AI performance evaluator. Analyze and compare the multiple 'Answers' for the given 'Question' based on the following criteria: Accuracy, Relevance, Completeness, Clarity, Helpfulness.
 
                 **Output Format:**
-                You MUST respond ONLY with a JSON object in the following format. Do not add any other text or explanations.
+                You MUST respond ONLY with a JSON object in the following format. The order in the "evaluation" array must match the order of the answers provided.
 
                 {
                   "evaluation": [
+                    // One object for each answer in the order they were provided
                     {
-                      "model_name": "${modelAName}",
-                      "scores": {
-                        "accuracy": /* integer between 1-10 */,
-                        "relevance": /* integer between 1-10 */,
-                        "completeness": /* integer between 1-10 */,
-                        "clarity": /* integer between 1-10 */,
-                        "helpfulness": /* integer between 1-10 */
-                      },
-                      "summary": "A concise summary in Korean explaining the rationale for the scores."
-                    },
-                    {
-                      "model_name": "${modelBName}",
-                      "scores": {
-                        "accuracy": /* integer between 1-10 */,
-                        "relevance": /* integer between 1-10 */,
-                        "completeness": /* integer between 1-10 */,
-                        "clarity": /* integer between 1-10 */,
-                        "helpfulness": /* integer between 1-10 */
-                      },
-                      "summary": "A concise summary in Korean explaining the rationale for the scores."
+                      "model_name": /* model name from input */,
+                      "scores": { "accuracy": /* 1-10 */, "relevance": /* 1-10 */, "completeness": /* 1-10 */, "clarity": /* 1-10 */, "helpfulness": /* 1-10 */ },
+                      "summary": "A concise summary in Korean about this specific answer."
                     }
                   ],
                   "verdict": {
-                    "winner": "'${modelAName}' or '${modelBName}'",
-                    "reasoning": "A comprehensive comparison in Korean explaining why the winning answer is superior."
+                    "winner": /* One of ${modelNames} */,
+                    "reasoning": "A comprehensive comparison in Korean explaining why the winning answer is superior overall."
                   }
                 }
 
                 **Content to Analyze:**
-
                 **Question:**
                 ${question}
 
-                **Answer A (${modelAName}):**
-                ${answerA}
-
-                **Answer B (${modelBName}):**
-                ${answerB}
+                ${answersString}
             `;
             
-            const payload = {
-                contents: [{ parts: [{ text: prompt }] }],
-                generationConfig: { responseMimeType: "application/json" }
-            };
-            
-            const response = await fetch(apiUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
+            const payload = { contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseMimeType: "application/json" } };
+            const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
 
-            if (!response.ok) throw new Error(`API call failed with status: ${response.status}`);
+            if (!response.ok) throw new Error(`API call failed: ${response.status}`);
             const result = await response.json();
             
             if (result.candidates && result.candidates[0].content.parts.length > 0) {
-                const rawJson = result.candidates[0].content.parts[0].text;
-                const parsedResult = JSON.parse(rawJson);
-                parsedResult.evaluation[0].model_name = modelAName;
-                parsedResult.evaluation[1].model_name = modelBName;
-                if (parsedResult.verdict.winner.includes('A')) {
-                    parsedResult.verdict.winner = modelAName;
-                } else if (parsedResult.verdict.winner.includes('B')) {
-                    parsedResult.verdict.winner = modelBName;
-                }
+                const parsedResult = JSON.parse(result.candidates[0].content.parts[0].text);
+                // API가 모델 이름을 잘못 출력할 경우를 대비해 프론트엔드에서 받은 이름으로 교정
+                parsedResult.evaluation.forEach((evalItem, index) => {
+                    evalItem.model_name = comparisonData[index].model_name;
+                });
                 return parsedResult;
             } else {
-                throw new Error("Invalid response structure from API.");
+                throw new Error("Invalid response from Gemini API.");
             }
         }
 
         function displaySingleResult(data) {
-            elements.resultDiv.innerHTML = `
-                <div id="verdictSection" class="bg-white p-6 rounded-2xl shadow-lg mb-8 text-center">
+            const resultHtml = `
+                <div class="bg-white p-6 rounded-2xl shadow-lg mb-8 text-center">
                     <h2 class="text-2xl font-bold mb-2">종합 평가</h2>
-                    <p class="text-3xl font-bold" id="winner">🏆 ${data.verdict.winner}의 승리!</p>
-                    <p class="text-gray-600 mt-4 mx-auto max-w-3xl" id="reasoning">${data.verdict.reasoning}</p>
+                    <p class="text-3xl font-bold">🏆 ${data.verdict.winner}의 승리!</p>
+                    <p class="text-gray-600 mt-4 mx-auto max-w-3xl">${data.verdict.reasoning}</p>
                 </div>
-                <div class="grid md:grid-cols-2 gap-8">
-                    <div class="bg-white p-6 rounded-2xl shadow-lg">${createResultCard(data.evaluation[0])}</div>
-                    <div class="bg-white p-6 rounded-2xl shadow-lg">${createResultCard(data.evaluation[1])}</div>
+                <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    ${data.evaluation.map(createResultCard).join('')}
                 </div>
             `;
+            elements.resultDiv.innerHTML = resultHtml;
             elements.resultDiv.classList.remove('hidden');
-            elements.resultDiv.querySelector('#verdictSection').classList.add('card-enter');
-            setTimeout(() => elements.resultDiv.querySelector('#verdictSection').classList.add('card-enter-active'), 10);
         }
 
         function createResultCard(evalData) {
@@ -498,30 +355,104 @@
                 const color = score >= 8 ? 'bg-green-500' : score >= 5 ? 'bg-yellow-500' : 'bg-red-500';
                 scoresHtml += `
                     <div class="mb-3">
-                        <div class="flex justify-between mb-1">
-                            <span class="text-base font-medium text-gray-700">${criteriaMapping[key]}</span>
-                            <span class="text-sm font-medium text-gray-700">${score} / 10</span>
-                        </div>
+                        <div class="flex justify-between mb-1"><span class="text-base font-medium text-gray-700">${criteriaMapping[key]}</span><span class="text-sm font-medium text-gray-700">${score}/10</span></div>
                         <div class="w-full bg-gray-200 rounded-full h-2.5"><div class="${color} h-2.5 rounded-full" style="width: ${score * 10}%"></div></div>
                     </div>`;
             }
             return `
-                <h3 class="text-2xl font-bold mb-4 text-center">${evalData.model_name} 상세 평가</h3>
-                <div class="mb-6">${scoresHtml}</div>
-                <div>
-                    <h4 class="font-semibold text-lg mb-2">평가 요약</h4>
-                    <p class="text-gray-600 bg-gray-50 p-3 rounded-lg">${evalData.summary}</p>
+                <div class="bg-white p-6 rounded-2xl shadow-lg">
+                    <h3 class="text-2xl font-bold mb-4 text-center">${evalData.model_name} 상세 평가</h3>
+                    <div class="mb-6">${scoresHtml}</div>
+                    <div><h4 class="font-semibold text-lg mb-2">평가 요약</h4><p class="text-gray-600 bg-gray-50 p-3 rounded-lg">${evalData.summary}</p></div>
                 </div>`;
+        }
+        
+        function calculateAndDisplayAverages() {
+            const modelScores = {};
+            state.evaluations.forEach(ev => {
+                ev.results.forEach(res => {
+                    if (!modelScores[res.ModelName]) {
+                        modelScores[res.ModelName] = { total: 0, count: 0 };
+                    }
+                    const scores = JSON.parse(res.ScoresJSON);
+                    const avgScore = Object.values(scores).reduce((a, b) => a + b, 0) / Object.keys(scores).length;
+                    modelScores[res.ModelName].total += avgScore;
+                    modelScores[res.ModelName].count++;
+                });
+            });
+
+            elements.averageScoresSection.innerHTML = '';
+            if (Object.keys(modelScores).length === 0) {
+                elements.averageScoresSection.innerHTML = `<p class="text-gray-500 col-span-full">평가 기록이 없습니다.</p>`;
+                return;
+            }
+            for (const modelName in modelScores) {
+                const avg = (modelScores[modelName].total / modelScores[modelName].count).toFixed(2);
+                elements.averageScoresSection.innerHTML += `
+                    <div class="bg-white p-4 rounded-lg shadow">
+                        <h3 class="font-bold text-lg">${modelName}</h3>
+                        <p class="text-3xl font-bold text-blue-600">${avg}</p>
+                        <p class="text-sm text-gray-500">${modelScores[modelName].count}회 평가</p>
+                    </div>`;
+            }
+        }
+
+        function displayHistory() {
+            elements.historySection.innerHTML = '';
+            if (state.evaluations.length === 0) {
+                elements.historySection.innerHTML = `<div class="bg-white p-6 rounded-lg shadow text-center text-gray-500">평가 기록이 없습니다.</div>`;
+                return;
+            }
+            state.evaluations.slice().reverse().forEach((ev, index) => {
+                const scoresSummary = ev.results.map(res => {
+                    const scores = JSON.parse(res.ScoresJSON);
+                    const avg = (Object.values(scores).reduce((a, b) => a + b, 0) / Object.keys(scores).length).toFixed(1);
+                    return `<span>${res.ModelName}: <strong class="text-blue-600">${avg}점</strong></span>`;
+                }).join('<span class="mx-2 text-gray-400">vs</span>');
+
+                const itemHtml = `
+                    <div class="bg-white rounded-lg shadow-md overflow-hidden">
+                        <div class="p-4 cursor-pointer hover:bg-gray-50 flex justify-between items-center" onclick="toggleHistory(this)">
+                            <div class="flex-grow overflow-hidden pr-4">
+                                <p class="font-semibold text-gray-800 truncate">${ev.Question}</p>
+                                <div class="text-sm text-gray-500 mt-1 flex flex-wrap gap-x-2 gap-y-1">${scoresSummary}</div>
+                            </div>
+                            <i class="fas fa-chevron-down transition-transform flex-shrink-0"></i>
+                        </div>
+                        <div class="history-item-content bg-gray-50 p-4 border-t border-gray-200">
+                            <h4 class="font-bold text-lg mb-2">종합 평가: ${ev.WinnerModel}의 승리! 🏆</h4>
+                            <p class="text-gray-600 mb-4 italic">"${ev.OverallReasoning}"</p>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                ${ev.results.map(res => `
+                                    <div>
+                                        <h5 class="font-semibold mb-2">${res.ModelName}의 답변</h5>
+                                        <p class="text-sm bg-white p-3 rounded whitespace-pre-wrap">${res.Answer}</p>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>`;
+                elements.historySection.innerHTML += itemHtml;
+            });
+        }
+
+        function toggleHistory(header) {
+            const content = header.nextElementSibling;
+            const icon = header.querySelector('i');
+            if (content.style.maxHeight && content.style.maxHeight !== '0px') {
+                content.style.maxHeight = '0px';
+                icon.style.transform = 'rotate(0deg)';
+            } else {
+                content.style.maxHeight = content.scrollHeight + 'px';
+                icon.style.transform = 'rotate(180deg)';
+            }
         }
 
         function showError(message) {
             elements.errorMessage.textContent = message;
             elements.errorDiv.classList.remove('hidden');
         }
-
-        function hideError() {
-            elements.errorDiv.classList.add('hidden');
-        }
+        function hideError() { elements.errorDiv.classList.add('hidden'); }
     </script>
 </body>
 </html>
